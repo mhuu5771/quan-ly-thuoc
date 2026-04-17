@@ -5,22 +5,24 @@ from datetime import datetime
 import os
 import sys
 
-# --- CẤU HÌNH ĐƯỜNG DẪN ĐỂ ĐÓNG GÓI PYINSTALLER ---
+# --- CẤU HÌNH ĐƯỜNG DẪN TÀI NGUYÊN ---
 def get_resource_path(relative_path):
-    """ Lấy đường dẫn tuyệt đối đến tài nguyên, phục vụ cả khi chạy dev và khi đã đóng gói .exe """
     try:
-        # PyInstaller tạo một thư mục tạm và lưu đường dẫn trong _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-app = Flask(__name__, 
-            template_folder=get_resource_path('templates'))
+app = Flask(__name__, template_folder=get_resource_path('templates'))
 app.secret_key = "pharmacy_ultra_design_2026"
 
-# File database sẽ được lưu cùng cấp với file .exe để dữ liệu không bị mất khi tắt app
-DB_PATH = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), 'database.db')
+# --- CẤU HÌNH DATABASE CHO RENDER & LOCAL ---
+# Trên Render, chúng ta sử dụng thư mục /tmp để có quyền Ghi (Write)
+if os.environ.get('RENDER'):
+    DB_PATH = os.path.join('/tmp', 'database.db')
+else:
+    # Chạy trên máy Mac cá nhân
+    DB_PATH = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), 'database.db')
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -36,10 +38,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- CÁC ROUTE GIỮ NGUYÊN LOGIC ---
+# --- ROUTES ---
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST', 'HEAD'])
 def index():
+    # Xử lý HEAD request từ Render để tránh lỗi 500
+    if request.method == 'HEAD':
+        return '', 200
+    
     conn = get_db_connection()
     batches = conn.execute('SELECT * FROM batches ORDER BY created_at DESC').fetchall()
     stats = conn.execute('''SELECT 
@@ -102,14 +108,18 @@ def export_excel(id):
     df = pd.read_sql_query("SELECT medicine_name as 'Tên Thuốc', package_type as 'Loại', quantity as 'Số Lượng', reason as 'Lý Do' FROM returns WHERE batch_id = ?", conn, params=(id,))
     conn.close()
     
-    # Lưu file excel tạm vào cùng thư mục chạy app để người dùng dễ lấy
     filename = f"Phieu_Tra_Hang_{batch['batch_code']}.xlsx"
-    export_path = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), filename)
+    # Trên Render lưu vào /tmp, trên Mac lưu cạnh file chạy
+    if os.environ.get('RENDER'):
+        export_path = os.path.join('/tmp', filename)
+    else:
+        export_path = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), filename)
+        
     df.to_excel(export_path, index=False)
-    
     return send_file(export_path, as_attachment=True)
 
 if __name__ == '__main__':
     init_db()
-    # Chạy host 0.0.0.0 để dùng được cả trên điện thoại khi chung Wifi
-    app.run(host='0.0.0.0', port=5005, debug=False)
+    # Tự động chọn Port cho Render hoặc mặc định 5005 cho Mac
+    port = int(os.environ.get("PORT", 5005))
+    app.run(host='0.0.0.0', port=port, debug=False)

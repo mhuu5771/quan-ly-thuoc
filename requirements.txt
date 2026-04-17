@@ -2,3 +2,4 @@ flask
 pandas
 openpyxl
 gunicorn
+psycopg2-binary  # Thêm cái này nếu bạn định dùng PostgreSQL

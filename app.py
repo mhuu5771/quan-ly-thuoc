@@ -5,7 +5,6 @@ from datetime import datetime
 import os
 import sys
 
-# --- CẤU HÌNH ĐƯỜNG DẪN TÀI NGUYÊN ---
 def get_resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
@@ -16,12 +15,10 @@ def get_resource_path(relative_path):
 app = Flask(__name__, template_folder=get_resource_path('templates'))
 app.secret_key = "pharmacy_ultra_design_2026"
 
-# --- CẤU HÌNH DATABASE CHO RENDER & LOCAL ---
-# Trên Render, chúng ta sử dụng thư mục /tmp để có quyền Ghi (Write)
+# Cấu hình đường dẫn DB an toàn cho Render
 if os.environ.get('RENDER'):
     DB_PATH = os.path.join('/tmp', 'database.db')
 else:
-    # Chạy trên máy Mac cá nhân
     DB_PATH = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), 'database.db')
 
 def get_db_connection():
@@ -30,13 +27,12 @@ def get_db_connection():
     return conn
 
 def init_db():
+    """ Đảm bảo các bảng luôn tồn tại trước khi dùng """
     conn = get_db_connection()
-    # Sử dụng IF NOT EXISTS để đảm bảo không lỗi nếu bảng đã có
     conn.execute('''CREATE TABLE IF NOT EXISTS batches (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         batch_code TEXT UNIQUE, 
         created_at DATETIME)''')
-    
     conn.execute('''CREATE TABLE IF NOT EXISTS returns (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         batch_id INTEGER, 
@@ -47,34 +43,25 @@ def init_db():
         FOREIGN KEY (batch_id) REFERENCES batches (id))''')
     conn.commit()
     conn.close()
-    print("Khởi tạo Database thành công!")
-
-# --- ROUTES ---
 
 @app.route('/', methods=['GET', 'POST', 'HEAD'])
 def index():
     if request.method == 'HEAD':
         return '', 200
     
-    # Gọi khởi tạo bảng ngay tại đây để chắc chắn bảng luôn có sẵn
+    # MẸO QUAN TRỌNG: Luôn gọi init_db() mỗi khi vào trang chủ 
+    # để đảm bảo nếu DB bị xóa thì nó sẽ tự tạo lại bảng ngay lập tức.
     init_db() 
     
     conn = get_db_connection()
-    try:
-        batches = conn.execute('SELECT * FROM batches ORDER BY created_at DESC').fetchall()
-        stats = conn.execute('''SELECT 
-                SUM(CASE WHEN package_type = 'Hộp' THEN quantity ELSE 0 END) as total_hop,
-                SUM(CASE WHEN package_type = 'Chai' THEN quantity ELSE 0 END) as total_chai,
-                SUM(CASE WHEN package_type = 'Lọ' THEN quantity ELSE 0 END) as total_lo,
-                SUM(CASE WHEN package_type = 'Bì' THEN quantity ELSE 0 END) as total_bi
-            FROM returns''').fetchone()
-    except Exception as e:
-        print(f"Lỗi truy vấn: {e}")
-        batches = []
-        stats = [0, 0, 0, 0]
-    finally:
-        conn.close()
-        
+    batches = conn.execute('SELECT * FROM batches ORDER BY created_at DESC').fetchall()
+    stats = conn.execute('''SELECT 
+            SUM(CASE WHEN package_type = 'Hộp' THEN quantity ELSE 0 END) as total_hop,
+            SUM(CASE WHEN package_type = 'Chai' THEN quantity ELSE 0 END) as total_chai,
+            SUM(CASE WHEN package_type = 'Lọ' THEN quantity ELSE 0 END) as total_lo,
+            SUM(CASE WHEN package_type = 'Bì' THEN quantity ELSE 0 END) as total_bi
+        FROM returns''').fetchone()
+    conn.close()
     return render_template('index.html', batches=batches, stats=stats)
 
 @app.route('/create_batch', methods=['POST'])

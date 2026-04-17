@@ -31,30 +31,50 @@ def get_db_connection():
 
 def init_db():
     conn = get_db_connection()
-    conn.execute('CREATE TABLE IF NOT EXISTS batches (id INTEGER PRIMARY KEY AUTOINCREMENT, batch_code TEXT UNIQUE, created_at DATETIME)')
+    # Sử dụng IF NOT EXISTS để đảm bảo không lỗi nếu bảng đã có
+    conn.execute('''CREATE TABLE IF NOT EXISTS batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        batch_code TEXT UNIQUE, 
+        created_at DATETIME)''')
+    
     conn.execute('''CREATE TABLE IF NOT EXISTS returns (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, batch_id INTEGER, medicine_name TEXT, 
-        package_type TEXT, quantity INTEGER, reason TEXT, FOREIGN KEY (batch_id) REFERENCES batches (id))''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        batch_id INTEGER, 
+        medicine_name TEXT, 
+        package_type TEXT, 
+        quantity INTEGER, 
+        reason TEXT, 
+        FOREIGN KEY (batch_id) REFERENCES batches (id))''')
     conn.commit()
     conn.close()
+    print("Khởi tạo Database thành công!")
 
 # --- ROUTES ---
 
 @app.route('/', methods=['GET', 'POST', 'HEAD'])
 def index():
-    # Xử lý HEAD request từ Render để tránh lỗi 500
     if request.method == 'HEAD':
         return '', 200
     
+    # Gọi khởi tạo bảng ngay tại đây để chắc chắn bảng luôn có sẵn
+    init_db() 
+    
     conn = get_db_connection()
-    batches = conn.execute('SELECT * FROM batches ORDER BY created_at DESC').fetchall()
-    stats = conn.execute('''SELECT 
-            SUM(CASE WHEN package_type = 'Hộp' THEN quantity ELSE 0 END) as total_hop,
-            SUM(CASE WHEN package_type = 'Chai' THEN quantity ELSE 0 END) as total_chai,
-            SUM(CASE WHEN package_type = 'Lọ' THEN quantity ELSE 0 END) as total_lo,
-            SUM(CASE WHEN package_type = 'Bì' THEN quantity ELSE 0 END) as total_bi
-        FROM returns''').fetchone()
-    conn.close()
+    try:
+        batches = conn.execute('SELECT * FROM batches ORDER BY created_at DESC').fetchall()
+        stats = conn.execute('''SELECT 
+                SUM(CASE WHEN package_type = 'Hộp' THEN quantity ELSE 0 END) as total_hop,
+                SUM(CASE WHEN package_type = 'Chai' THEN quantity ELSE 0 END) as total_chai,
+                SUM(CASE WHEN package_type = 'Lọ' THEN quantity ELSE 0 END) as total_lo,
+                SUM(CASE WHEN package_type = 'Bì' THEN quantity ELSE 0 END) as total_bi
+            FROM returns''').fetchone()
+    except Exception as e:
+        print(f"Lỗi truy vấn: {e}")
+        batches = []
+        stats = [0, 0, 0, 0]
+    finally:
+        conn.close()
+        
     return render_template('index.html', batches=batches, stats=stats)
 
 @app.route('/create_batch', methods=['POST'])

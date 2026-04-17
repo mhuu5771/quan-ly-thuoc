@@ -1,0 +1,56 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row g-3 mb-4 text-center">
+    {% set items = [('Hộp', stats.total_hop, 'primary', 'bi-box'), ('Chai', stats.total_chai, 'success', 'bi-droplet'), ('Lọ', stats.total_lo, 'warning', 'bi-eyedropper'), ('Bì', stats.total_bi, 'info', 'bi-bag')] %}
+    {% for label, val, color, icon in items %}
+    <div class="col-6 col-md-3">
+        <div class="card p-3 stat-card border-start-0 shadow-sm">
+            <div class="d-flex align-items-center justify-content-center mb-1">
+                <i class="bi {{icon}} text-{{color}} me-2"></i>
+                <small class="text-muted fw-bold">{{label}}</small>
+            </div>
+            <div class="h3 fw-bold text-dark mb-0">{{ val or 0 }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card overflow-hidden shadow-sm">
+    <div class="card-header bg-white py-4 px-4 d-flex justify-content-between align-items-center border-0">
+        <div>
+            <h5 class="mb-0 fw-bold">Danh sách Đợt hàng</h5>
+            <p class="text-muted small mb-0">Quản lý và xuất file cho kho</p>
+        </div>
+        <form action="{{ url_for('create_batch') }}" method="post">
+            <button type="submit" class="btn btn-primary btn-sm shadow-sm d-flex align-items-center">
+                <i class="bi bi-plus-lg me-2"></i>Tạo đợt mới
+            </button>
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {% for batch in batches %}
+            <div class="list-group-item p-4 border-light d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                <div class="mb-3 mb-md-0">
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="badge bg-primary-subtle text-primary me-2 rounded-2">#{{ batch.batch_code }}</span>
+                        <div class="fw-bold fs-5">{{ batch.created_at[:10] }}</div>
+                    </div>
+                    <small class="text-muted"><i class="bi bi-clock me-1"></i>{{ batch.created_at[11:] }}</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('view_batch', id=batch.id) }}" class="btn btn-outline-primary btn-sm rounded-3 flex-grow-1 px-3">Chi tiết</a>
+                    <a href="{{ url_for('export_excel', id=batch.id) }}" class="btn btn-light btn-sm rounded-3 border px-3"><i class="bi bi-download text-success"></i></a>
+                    <a href="{{ url_for('delete_batch', id=batch.id) }}" class="btn btn-light btn-sm rounded-3 border px-3" onclick="return confirm('Xóa đợt này?')"><i class="bi bi-trash3 text-danger"></i></a>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-clipboard-x fs-1 text-muted opacity-25"></i>
+                <p class="mt-2 text-muted">Chưa có dữ liệu nào được lập.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
